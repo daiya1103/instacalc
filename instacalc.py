@@ -4,11 +4,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome import service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import (
-    NoSuchElementException,
-    ElementClickInterceptedException,
-    StaleElementReferenceException
-)
 from selenium.webdriver.common.action_chains import ActionChains
 
 import os
@@ -16,17 +11,18 @@ from PIL import Image
 import openpyxl
 from styleframe import StyleFrame
 import pandas as pd
-
+import re
 import shutil
 import pathlib
 import sys
+import math
 
 # インスタグラムID or EMAIL, PASSWORD
 USERNAME = 'daishin298@gmail.com'
 PASSWORD = 'tY/b8pow'
 
 # ぶっこぬき対象インスタID
-IDS = ['merucari_kangoshi_yuki',]
+IDS = ['marina.mercari', '_realiser7aya', 'inport_meru']
 
 
 
@@ -44,9 +40,18 @@ NEXT_BTN = 'div._aaqg > button'
 # ARTICLE_THUMB = 'article > div > div:nth-of-type(1)'
 ACCESS = 'span[style="line-height: 18px;"]'
 LIKE_VALUE = ACCESS + ' > span'
+SCROLL = 'div[style="height: 356px; overflow: hidden auto;"]'
+LIKE_PEOPLE = 'div[style="height: 356px; overflow: hidden auto;"] > div > div > div > div > div > div > div > div > div > div > a'
 URL = 'article > div > div:nth-of-type(2) > div > div> div:nth-of-type(2) > div:nth-of-type(2) a'
 DATE = ACCESS + ' > time'
 
+def word_regex(word):
+        code_regex = re.compile(
+            "[!\'#$%&'\\\\()*+,-./:;<=>?@[\\]^_`{|}~「」〔〕“”〈〉『』【】＆＊・（）＄＃＠。、？！｀＋￥％]"
+        )
+        word = code_regex.sub('', word)
+
+        return word
 
 def setup_webdriver():
     options = Options()
@@ -67,7 +72,7 @@ def setup_webdriver():
 
 def scrape():
     driver = setup_webdriver()
-    driver.implicitly_wait(10)
+    driver.implicitly_wait(3)
 
     driver.get('https://www.instagram.com/')
 
@@ -97,7 +102,7 @@ def scrape():
         url_len_old = 0
         url_len_new = 1
 
-        while len(url_list) < 50 or url_len_old == url_len_new :
+        while len(url_list) < 50 and url_len_old < url_len_new :
             sleep(2)
             url_len_old = len(url_list)
             posts = driver.find_elements(By.CSS_SELECTOR, ALL_POST)
@@ -117,32 +122,62 @@ def scrape():
         article_datas = []
 
         for url in url_list:
-            driver.get(url)
-            sleep(1)
-
-            access_elms = driver.find_elements(By.CSS_SELECTOR, ACCESS)
-
-            if len(access_elms) >= 3:
-                # いいね数抽出
-                like = int(driver.find_element(By.CSS_SELECTOR, LIKE_VALUE).text)
-                content = access_elms[len(access_elms)-2].text
-                # 投稿日抽
-                date = driver.find_element(By.CSS_SELECTOR, DATE).get_attribute('title')
-                rep = url.split('/')[-2]
-                i += 1
+            try:
+                driver.get(url)
                 sleep(1)
-                article_data = {
-                    'サムネイル': '',
-                    'URL': url,
-                    '投稿日': date,
-                    'いいね': like,
-                    '内容': content,
-                    '投稿ID': rep,
-                }
 
-                article_datas.append(article_data)
+                access_elms = driver.find_elements(By.CSS_SELECTOR, ACCESS)
 
-        driver.quit()
+                if len(access_elms) >= 3:
+                    # いいね数抽出
+                    content = access_elms[-3].text
+                    # 投稿日抽
+                    date = driver.find_element(By.CSS_SELECTOR, DATE).get_attribute('title')
+                    rep = url.split('/')[-2]
+                    try:
+                        like = int(driver.find_element(By.CSS_SELECTOR, LIKE_VALUE).text)
+                    except:
+                        access_elms[-1].click()
+                        sleep(1)
+                        old_len = 0
+                        new_len = 1
+                        like_url_list = []
+                        while old_len < new_len:
+                            old_len = len(like_url_list)
+                            likes = driver.find_elements(By.CSS_SELECTOR, LIKE_PEOPLE)
+                            for like_a in likes:
+                                like_url = like_a.get_attribute('href')
+                                if like_url not in like_url_list:
+                                    like_url_list.append(like_url)
+                            new_len = len(like_url_list)
+
+                            scroll_element = driver.find_element(By.CSS_SELECTOR, SCROLL)
+                            current_scroll_position = driver.execute_script("return arguments[0].scrollTop;", scroll_element)
+                            actions = ActionChains(driver)
+                            actions.move_to_element(scroll_element).perform()
+                            scroll_script = """
+                                arguments[0].scrollTop = arguments[1];
+                            """
+                            driver.execute_script(scroll_script, scroll_element, current_scroll_position + 356)
+                            sleep(1)
+                        like = new_len
+                    sleep(1)
+                    article_data = {
+                        'サムネイル': '',
+                        'URL': url,
+                        '投稿日': date,
+                        'いいね': like,
+                        '内容': content,
+                        '投稿ID': rep,
+                    }
+
+                    article_datas.append(article_data)
+            except Exception as e: 
+                print(url)
+                print(e)
+                pass
+
+        id = word_regex(id)
 
         XLSX_PATH = CUR_DIR + '/result/' + id + '.xlsx'
         article_df = pd.DataFrame(article_datas)
@@ -175,5 +210,7 @@ def scrape():
         workbook.save(XLSX_PATH)
         shutil.rmtree(CUR_DIR + '/thumbnail')
         os.makedirs(CUR_DIR + '/thumbnail')
+
+    driver.quit()
 
 scrape()
