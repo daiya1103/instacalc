@@ -16,15 +16,7 @@ import shutil
 import pathlib
 import sys
 import math
-
-# インスタグラムID or EMAIL, PASSWORD
-USERNAME = ''
-PASSWORD = ''
-
-# ぶっこぬき対象インスタID
-IDS = ['marina.mercari', '_realiser7aya', 'inport_meru']
-
-
+from toko import USERNAME, PASSWORD, IDS
 
 # 注！！！！以下おさわり厳禁！！！！
 CUR_DIR = str(pathlib.Path(sys.argv[0]).resolve().parent)
