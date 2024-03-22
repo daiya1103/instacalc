@@ -18,8 +18,8 @@ import sys
 import math
 
 # インスタグラムID or EMAIL, PASSWORD
-USERNAME = 'daishin298@gmail.com'
-PASSWORD = 'tY/b8pow'
+USERNAME = ''
+PASSWORD = ''
 
 # ぶっこぬき対象インスタID
 IDS = ['marina.mercari', '_realiser7aya', 'inport_meru']
